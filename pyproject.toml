@@ -1,7 +1,7 @@
 [project]
 name = "fish-market"
 version = "0.1.0"
-description = "Add your description here"
+description = "Telegram bot for fish shop (Devman project)"
 requires-python = ">=3.13"
 dependencies = [
     "httpx>=0.28.1",
