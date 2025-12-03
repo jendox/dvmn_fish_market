@@ -15,13 +15,7 @@ from telegram.ext.filters import TEXT
 from starapi import get_products, get_product, download_image, add_product_to_cart, get_cart_items, \
     CartItem, delete_cart_item, add_customer, Customer
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
 logger = logging.getLogger("bot")
-
-BASE_URL = "http://localhost:1337"
 
 
 class BotState(StrEnum):
@@ -34,6 +28,7 @@ class BotState(StrEnum):
 
 @dataclass(frozen=True)
 class AppConfig:
+    starapi_url: str
     starapi_token: str
     bot_token: str
     redis_host: str
@@ -48,6 +43,7 @@ class AppConfig:
 
 def get_app_config() -> AppConfig:
     return AppConfig(
+        starapi_url=os.getenv("STARAPI_URL", "http://localhost:1337"),
         starapi_token=os.environ["STARAPI_API_TOKEN"],
         bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
         redis_host=os.environ["REDIS_HOST"],
@@ -162,7 +158,6 @@ async def handle_menu(update: Update, context: CallbackContext) -> BotState:
 
 async def handle_description(update: Update, context: CallbackContext) -> BotState:
     query = update.callback_query
-    await query.answer()
     client = context.bot_data["http_client"]
 
     data = query.data
@@ -171,16 +166,16 @@ async def handle_description(update: Update, context: CallbackContext) -> BotSta
         product_doc_id = data.split(":", 1)[1]
         try:
             await add_product_to_cart(telegram_id, product_doc_id, 1.0, client)
-            await query.message.chat.send_message("🛒 Товар добавлен в корзину!")
+            await query.answer("🛒 Товар добавлен в корзину!")
         except Exception:
-            await query.message.chat.send_message(
+            await query.answer(
                 "Не удалось добавить товар в корзину. Попробуйте позже."
             )
         return BotState.HANDLE_DESCRIPTION
 
     products = await get_products(client)
     if not products:
-        await query.message.chat.send_message(
+        await query.answer(
             "К сожалению товары временно недоступны. Попробуйте позже."
         )
         return BotState.HANDLE_MENU
@@ -201,7 +196,6 @@ async def handle_description(update: Update, context: CallbackContext) -> BotSta
 async def handle_cart(update: Update, context: CallbackContext) -> BotState:
     client = context.bot_data["http_client"]
     query = update.callback_query
-    await query.answer()
 
     chat = query.message.chat
     delete_message_id = query.message.message_id
@@ -209,6 +203,7 @@ async def handle_cart(update: Update, context: CallbackContext) -> BotState:
 
     data = query.data
     if data == "pay":
+        await query.answer()
         await chat.send_message("Введите ваш email для связи:")
         return BotState.WAITING_EMAIL
 
@@ -216,9 +211,9 @@ async def handle_cart(update: Update, context: CallbackContext) -> BotState:
         cart_item_doc_id = data.split(":", 1)[1]
         try:
             await delete_cart_item(cart_item_doc_id, client)
-            await chat.send_message("Товар удалён.")
+            await query.answer("Товар удалён.")
         except Exception:
-            await chat.send_message("Не удалось удалить товар. Попробуйте позже.")
+            await query.answer("Не удалось удалить товар. Попробуйте позже.")
 
     try:
         cart_items = await get_cart_items(telegram_id, client)
@@ -299,9 +294,9 @@ async def handle_users_reply(update: Update, context: CallbackContext):
 
 
 async def post_init(application: Application):
-    config = application.bot_data["config"]
+    config: AppConfig = application.bot_data["config"]
     application.bot_data["http_client"] = AsyncClient(
-        base_url=BASE_URL,
+        base_url=config.starapi_url,
         headers={"Authorization": f"Bearer {config.starapi_token}"},
         timeout=10.0,
     )
@@ -325,6 +320,10 @@ async def post_shutdown(application: Application):
 
 
 def main():
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=logging.INFO,
+    )
     load_dotenv()
     config = get_app_config()
 

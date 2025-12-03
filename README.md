@@ -59,6 +59,7 @@ touch .env
 
 Добавьте переменные окружения:
 ```env
+STARAPI_URL=starapi_server_url # по умолчанию используется значение http://localhost:1337
 STARAPI_API_TOKEN=your_starapi_token_here
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 

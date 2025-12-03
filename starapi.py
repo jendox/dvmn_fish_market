@@ -49,7 +49,7 @@ async def get_products(client: AsyncClient) -> list[Product]:
     try:
         response = await client.get("/api/products")
         response.raise_for_status()
-        products_data = response.json()
+        products = response.json().get("data", [])
         return [
             Product(
                 id=product["id"],
@@ -58,7 +58,7 @@ async def get_products(client: AsyncClient) -> list[Product]:
                 description=product["description"],
                 price=Decimal(product["price"]),
             )
-            for product in products_data.get("data", [])
+            for product in products
         ]
     except Exception as exc:
         logger.error(f"Ошибка получения списка продуктов: {str(exc)}")
@@ -102,10 +102,10 @@ async def get_cart_by_telegram_id(telegram_id: int, client: AsyncClient) -> str:
         params = {"filters[telegram_id][$eq]": telegram_id}
         response = await client.get("/api/carts", params=params)
         response.raise_for_status()
-        data = response.json().get("data")
-        if not data:
+        carts = response.json().get("data")
+        if not carts:
             raise CartNotFound(f"Корзина для telegram_id={telegram_id} не найдена.")
-        return data[0]["documentId"]
+        return carts[0]["documentId"]
     except Exception as exc:
         logger.error(f"Ошибка поиска корзины для telegram_id={telegram_id}: {str(exc)}")
         raise
@@ -116,10 +116,10 @@ async def create_cart(telegram_id: int, client: AsyncClient) -> str:
         payload = {"data": {"telegram_id": str(telegram_id)}}
         response = await client.post("/api/carts", json=payload)
         response.raise_for_status()
-        data = response.json()
-        cart_id = data["documentId"]
-        logger.info(f"Создана корзина {cart_id} для пользователя telegram_id={telegram_id}")
-        return cart_id
+        new_cart = response.json()
+        cart_doc_id = new_cart["documentId"]
+        logger.info(f"Создана корзина {cart_doc_id} для пользователя telegram_id={telegram_id}")
+        return cart_doc_id
     except Exception as exc:
         logger.error(f"Ошибка создания корзины для пользователя {telegram_id}: {str(exc)}")
         raise
@@ -229,13 +229,13 @@ async def get_customer_by_telegram_id(telegram_id: int, client: AsyncClient) -> 
         params = {"filters[telegram_id][$eq]": telegram_id}
         response = await client.get("/api/customers", params=params)
         response.raise_for_status()
-        data = response.json().get("data")
-        if not data:
+        customers = response.json().get("data")
+        if not customers:
             raise CustomerNotFound(f"Клиент с telegram_id={telegram_id} не найден.")
         return Customer(
-            telegram_id=data[0]["telegram_id"],
-            telegram_username=data[0]["telegram_username"],
-            email=data[0]["email"],
+            telegram_id=customers[0]["telegram_id"],
+            telegram_username=customers[0]["telegram_username"],
+            email=customers[0]["email"],
         )
     except Exception as exc:
         logger.error(f"Ошибка поиска клиента с telegram_id={telegram_id}: {str(exc)}")
