@@ -139,7 +139,7 @@ async def add_product_to_cart(
     telegram_id: int,
     product_doc_id: str,
     amount: float,
-    client: AsyncClient
+    client: AsyncClient,
 ) -> None:
     try:
         cart_doc_id = await ensure_cart(telegram_id, client)
@@ -153,7 +153,7 @@ async def add_product_to_cart(
         response = await client.post("/api/cart-items", json=payload)
         response.raise_for_status()
         logger.info(
-            f"Добавлен product_id={product_doc_id} amount={amount} в cart={cart_doc_id} (telegram_id={telegram_id})"
+            f"Добавлен product_id={product_doc_id} amount={amount} в cart={cart_doc_id} (telegram_id={telegram_id})",
         )
     except Exception as exc:
         logger.error(f"Ошибка добавления товара {product_doc_id} в корзину пользователя {telegram_id}: {str(exc)}")
@@ -188,7 +188,7 @@ async def get_cart_items(telegram_id: int, client: AsyncClient) -> list[CartItem
                     title=title,
                     amount=amount,
                     price=price,
-                )
+                ),
             )
         return items
     except Exception as exc:
@@ -220,7 +220,7 @@ async def add_customer(
         await client.post("/api/customers", json=payload)
     except Exception as exc:
         logger.error(
-            f"Ошибка создания клиента email={customer.email} telegram_id={customer.telegram_id}: {str(exc)}"
+            f"Ошибка создания клиента email={customer.email} telegram_id={customer.telegram_id}: {str(exc)}",
         )
 
 

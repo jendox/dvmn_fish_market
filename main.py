@@ -8,12 +8,21 @@ from enum import StrEnum
 from dotenv import load_dotenv
 from httpx import AsyncClient
 from redis.asyncio import Redis
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
-from telegram.ext import CallbackContext, Application, CommandHandler, CallbackQueryHandler, MessageHandler
+from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CallbackContext, CallbackQueryHandler, CommandHandler, MessageHandler
 from telegram.ext.filters import TEXT
 
-from starapi import get_products, get_product, download_image, add_product_to_cart, get_cart_items, \
-    CartItem, delete_cart_item, add_customer, Customer
+from starapi import (
+    CartItem,
+    Customer,
+    add_customer,
+    add_product_to_cart,
+    delete_cart_item,
+    download_image,
+    get_cart_items,
+    get_product,
+    get_products,
+)
 
 logger = logging.getLogger("bot")
 
@@ -69,7 +78,7 @@ def _format_cart_message(items: list[CartItem]) -> str:
             total = line_total if total is None else total + line_total
 
             lines.append(
-                f"• {title}: {amount} кг × {item.price} руб. = <b>{line_total}</b> руб."
+                f"• {title}: {amount} кг × {item.price} руб. = <b>{line_total}</b> руб.",
             )
         else:
             lines.append(f"• {title}: {amount} кг")
@@ -84,7 +93,7 @@ def _build_cart_keyboard(items: list[CartItem]) -> InlineKeyboardMarkup:
     keyboard = [
         [InlineKeyboardButton(
             text=f"❌ Удалить: {item.title}",
-            callback_data=f"remove_item:{item.document_id}"
+            callback_data=f"remove_item:{item.document_id}",
         )]
         for item in items
     ]
@@ -169,14 +178,14 @@ async def handle_description(update: Update, context: CallbackContext) -> BotSta
             await query.answer("🛒 Товар добавлен в корзину!")
         except Exception:
             await query.answer(
-                "Не удалось добавить товар в корзину. Попробуйте позже."
+                "Не удалось добавить товар в корзину. Попробуйте позже.",
             )
         return BotState.HANDLE_DESCRIPTION
 
     products = await get_products(client)
     if not products:
         await query.answer(
-            "К сожалению товары временно недоступны. Попробуйте позже."
+            "К сожалению товары временно недоступны. Попробуйте позже.",
         )
         return BotState.HANDLE_MENU
 
@@ -267,23 +276,7 @@ async def handle_users_reply(update: Update, context: CallbackContext):
     else:
         return
 
-    if user_reply == "/start":
-        user_state = BotState.START
-    elif user_reply == "back_to_menu":
-        user_state = BotState.HANDLE_DESCRIPTION
-    elif user_reply == "my_cart":
-        user_state = BotState.HANDLE_CART
-    elif user_reply.startswith("remove_item:"):
-        user_state = BotState.HANDLE_CART
-    elif user_reply == "pay":
-        user_state = BotState.WAITING_EMAIL
-    else:
-        stored = await redis.get(str(chat_id))
-        if stored is None:
-            user_state = BotState.START
-        else:
-            user_state = BotState(stored.decode())
-
+    user_state = await _resolve_state(user_reply, chat_id, redis)
     state_handler = context.bot_data["states"][user_state]
 
     try:
@@ -291,6 +284,29 @@ async def handle_users_reply(update: Update, context: CallbackContext):
         await redis.set(str(chat_id), str(next_state.value))
     except Exception as exc:
         logger.error(f"Ошибка: {str(exc)}")
+
+
+async def _resolve_state(
+    user_reply: str,
+    chat_id: int,
+    redis: Redis,
+) -> BotState:
+    state_mapping: dict[str, BotState] = {
+        "/start": BotState.START,
+        "back_to_menu": BotState.HANDLE_DESCRIPTION,
+        "my_cart": BotState.HANDLE_CART,
+        "pay": BotState.WAITING_EMAIL,
+    }
+    if user_reply in state_mapping:
+        return state_mapping[user_reply]
+
+    if user_reply.startswith("remove_item:"):
+        return BotState.HANDLE_CART
+
+    stored = await redis.get(str(chat_id))
+    if stored is None:
+        return BotState.START
+    return BotState(stored.decode())
 
 
 async def post_init(application: Application):

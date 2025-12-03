@@ -8,4 +8,5 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "python-telegram-bot>=22.5",
     "redis>=7.1.0",
+    "ruff>=0.14.7",
 ]
